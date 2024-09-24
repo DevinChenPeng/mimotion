@@ -308,9 +308,7 @@ def get_time():
     """
     获取时间戳
     """
-    url = 'http://api.m.taobao.com/rest/api3.do?api=mtop.common.getTimestamp'
-    response = requests.get(url, headers=headers).json()
-    t = response['data']['t']
+    t = int(time.time())
     return t
 
 

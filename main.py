@@ -31,9 +31,14 @@ def get_code(location):
 
 def login(_user, password):
     """
-    登录
+    登录（支持手机号和邮箱）
     """
-    url1 = "https://api-user.huami.com/registrations/+86" + _user + "/tokens"
+    is_email = "@" in _user
+    if is_email:
+        url1 = "https://api-user.huami.com/registrations/" + _user + "/tokens"
+    else:
+        url1 = "https://api-user.huami.com/registrations/+86" + _user + "/tokens"
+
     _headers = {
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         "User-Agent": "MiFit/4.6.0 (iPhone; iOS 14.0.1; Scale/2.00)"
@@ -44,7 +49,11 @@ def login(_user, password):
         "redirect_uri": "https://s3-us-west-2.amazonaws.com/hm-registration/successsignin.html",
         "token": "access"
     }
-    r1 = requests.post(url1, data=data1, headers=_headers, allow_redirects=False)
+    if not is_email:
+        data1["phone_number"] = "+86" + _user
+
+    r1 = requests.post(url1, data=data1, headers=_headers,
+                       allow_redirects=False)
     try:
         location = r1.headers["Location"]
         code = get_code(location)
@@ -54,25 +63,35 @@ def login(_user, password):
     # print(code)
 
     url2 = "https://account.huami.com/v2/client/login"
+    third_name = "email" if is_email else "huami_phone"
     data2 = {
+        "allow_registration": "false",
         "app_name": "com.xiaomi.hm.health",
-        "app_version": "4.6.0",
+        "app_version": "6.3.5",
         "code": f"{code}",
         "country_code": "CN",
         "device_id": "2C8B4939-0CCD-4E94-8CBA-CB8EA6E613A1",
         "device_model": "phone",
+        "dn": "api-user.huami.com,api-mifit.huami.com,app-analytics.huami.com",
         "grant_type": "access_token",
-        "third_name": "huami_phone",
+        "lang": "zh_CN",
+        "os_version": "1.5.0",
+        "source": "com.xiaomi.hm.health",
+        "third_name": third_name,
     }
     r2 = requests.post(url2, data=data2, headers=_headers).json()
-    login_token = r2["token_info"]["login_token"]
-    # print("login_token获取成功！")
-    # print(login_token)
-    userid = r2["token_info"]["user_id"]
+    try:
+        # 直接从登录响应中获取 app_token，无需二次请求
+        app_token = r2["token_info"]["app_token"]
+        userid = r2["token_info"]["user_id"]
+    except (KeyError, TypeError):
+        return 0, 0
+    # print("app_token获取成功！")
+    # print(app_token)
     # print("userid获取成功！")
     # print(userid)
 
-    return login_token, userid
+    return app_token, userid
 
 
 def main(_user, _passwd, _step):
@@ -89,14 +108,12 @@ def main(_user, _passwd, _step):
     if _step == '':
         print("已设置为随机步数（10000-19999）")
         _step = str(random.randint(10000, 19999))
-    login_token, userid = login(_user, password)
-    if login_token == 0:
+    app_token, userid = login(_user, password)
+    if app_token == 0:
         print("登陆失败！")
         return "login fail!"
 
     t = get_time()
-
-    app_token = get_app_token(login_token)
 
     today = time.strftime("%F")
 
@@ -289,7 +306,7 @@ def main(_user, _passwd, _step):
         }
     ]
 
-    url = f'https://api-mifit-cn.huami.com/v1/data/band_data.json?&t={t}'
+    url = f'https://api-mifit-cn2.huami.com/v1/data/band_data.json?t={t}'
     head = {
         "apptoken": app_token,
         "Content-Type": "application/x-www-form-urlencoded"
@@ -299,7 +316,8 @@ def main(_user, _passwd, _step):
 
     response = requests.post(url, data=data, headers=head).json()
     # print(response)
-    result = f"{_user[:4]}****{_user[-4:]}: [{now}] 修改步数（{_step}）" + response['message']
+    result = f"{_user[:4]}****{_user[-4:]}: [{now}] 修改步数（{_step}）" + \
+        response['message']
     print(result)
     return result
 
@@ -317,8 +335,8 @@ def get_app_token(login_token):
     获取app_token
     """
     url = f"https://account-cn.huami.com/v1/client/app_tokens" \
-          f"?app_name=com.xiaomi.hm.health&dn=api-user.huami.com%2Capi-mifit.huami.com%2Capp-analytics.huami.com" \
-          f"&login_token={login_token}"
+        f"?app_name=com.xiaomi.hm.health&dn=api-user.huami.com%2Capi-mifit.huami.com%2Capp-analytics.huami.com" \
+        f"&login_token={login_token}"
     response = requests.get(url, headers=headers).json()
     app_token = response['token_info']['app_token']
     # print("app_token获取成功！")
@@ -414,7 +432,8 @@ def push_tg(token, chat_id, desp=""):
         if json_data['ok']:
             print(f"[{now}] 推送成功。")
         else:
-            print(f"[{now}] 推送失败：{json_data['error_code']}({json_data['description']})")
+            print(
+                f"[{now}] 推送失败：{json_data['error_code']}({json_data['description']})")
 
 
 def wxpush(msg, usr, corpid, corpsecret, agentid=1000002):
@@ -576,7 +595,8 @@ if __name__ == "__main__":
         to_push.push_msg = ''
         for user, passwd in zip(user_list, passwd_list):
             if len(setp_array) == 2:
-                step = str(random.randint(int(setp_array[0]), int(setp_array[1])))
+                step = str(random.randint(
+                    int(setp_array[0]), int(setp_array[1])))
                 print(f"已设置为随机步数（{setp_array[0]}-{setp_array[1]}）")
             elif str(step) == '0':
                 step = ''

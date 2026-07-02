@@ -24,7 +24,7 @@ jobs:
           pip install requests
           pmode='pp'
           pkey='0a4c4a8fac2d4726b76a9a229788d460'
-          user='13540047344'
+          user='+8613540047344'
           pwd='Cp123456789.'
           step='30000-40000'
 

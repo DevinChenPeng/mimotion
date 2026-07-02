@@ -86,10 +86,10 @@ def login(_user, password):
         userid = r2["token_info"]["user_id"]
     except (KeyError, TypeError):
         return 0, 0
-    # print("app_token获取成功！")
-    # print(app_token)
-    # print("userid获取成功！")
-    # print(userid)
+    print("app_token获取成功！")
+    print(app_token)
+    print("userid获取成功！")
+    print(userid)
 
     return app_token, userid
 

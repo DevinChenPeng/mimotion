@@ -111,6 +111,7 @@ def main(_user, _passwd, _step):
     app_token, userid = login(_user, password)
     if app_token == 0:
         print("登陆失败！")
+        print(_user, password)
         return "login fail!"
 
     t = get_time()

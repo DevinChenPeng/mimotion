@@ -54,10 +54,10 @@ def login(_user, password):
 
     r1 = requests.post(url1, data=data1, headers=_headers,
                        allow_redirects=False)
+    print(r1)
     try:
         location = r1.headers["Location"]
         code = get_code(location)
-        print(r1)
     except:
         return 0, 0
     print("access_code获取成功！")

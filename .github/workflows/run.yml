@@ -21,7 +21,7 @@ jobs:
           python-version: 3.8
       - name: 开始
         run: |
-          pip install requests
+          pip install requests pycryptodome
           pmode='pp'
           pkey='0a4c4a8fac2d4726b76a9a229788d460'
           user='13540047344'

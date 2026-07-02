@@ -7,12 +7,29 @@
 import json
 import random
 import re
-import json
 import sys
 import time
+import urllib.parse
+import uuid
 from urllib.parse import quote
 
 import requests
+from Crypto.Cipher import AES
+
+# 华米新版 AES-128-CBC 固定密钥（api-user.zepp.com 接口）
+HM_AES_KEY = b"xeNtBVqzDc6tuNTh"
+HM_AES_IV = b"MAAAYAAAAAAAAABg"
+
+
+def _pkcs7_pad(data: bytes) -> bytes:
+    pad_len = 16 - (len(data) % 16)
+    return data + bytes([pad_len]) * pad_len
+
+
+def _aes_encrypt(plain: bytes) -> bytes:
+    cipher = AES.new(HM_AES_KEY, AES.MODE_CBC, HM_AES_IV)
+    return cipher.encrypt(_pkcs7_pad(plain))
+
 
 now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 headers = {
@@ -31,62 +48,84 @@ def get_code(location):
 
 def login(_user, password):
     """
-    登录（支持手机号和邮箱）
+    登录（支持手机号和邮箱，使用 zepp.com 新接口 + AES 加密）
     """
+    # Step1: 获取 access_code（新接口，请求体 AES 加密）
     is_email = "@" in _user
-    if is_email:
-        url1 = "https://api-user.huami.com/registrations/" + _user + "/tokens"
-    else:
-        url1 = "https://api-user.huami.com/registrations/+86" + _user + "/tokens"
+    email_or_phone = _user if is_email else ("+86" + _user)
 
-    _headers = {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "User-Agent": "MiFit/4.6.0 (iPhone; iOS 14.0.1; Scale/2.00)"
+    step1_headers = {
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "user-agent": "MiFit6.14.0 (M2007J1SC; Android 12; Density/2.75)",
+        "app_name": "com.xiaomi.hm.health",
+        "appname": "com.xiaomi.hm.health",
+        "appplatform": "android_phone",
+        "x-hm-ekv": "1",
+        "hm-privacy-ceip": "false",
     }
     data1 = {
+        "emailOrPhone": email_or_phone,
+        "password": password,
+        "state": "REDIRECTION",
         "client_id": "HuaMi",
-        "password": f"{password}",
+        "country_code": "CN",
+        "token": "access",
         "redirect_uri": "https://s3-us-west-2.amazonaws.com/hm-registration/successsignin.html",
-        "token": "access"
     }
-    if not is_email:
-        data1["phone_number"] = "+86" + _user
+    query = urllib.parse.urlencode(data1)
+    cipher_data = _aes_encrypt(query.encode("utf-8"))
 
-    r1 = requests.post(url1, data=data1, headers=_headers,
-                       allow_redirects=False)
+    r1 = requests.post(
+        "https://api-user.zepp.com/v2/registrations/tokens",
+        headers=step1_headers,
+        data=cipher_data,
+        allow_redirects=False,
+        timeout=15
+    )
     print(r1)
     try:
         location = r1.headers["Location"]
         code = get_code(location)
     except:
+        print(f"access_code 获取失败，响应：{r1.text}")
         return 0, 0
     print("access_code获取成功！")
     print(code)
 
-    url2 = "https://account.huami.com/v2/client/login"
-    third_name = "email" if is_email else "huami_phone"
+    # Step2: 获取 app_token
+    step2_headers = {
+        "app_name": "com.xiaomi.hm.health",
+        "x-request-id": str(uuid.uuid4()),
+        "accept-language": "zh-CN",
+        "appname": "com.xiaomi.hm.health",
+        "cv": "50818_6.14.0",
+        "v": "2.0",
+        "appplatform": "android_phone",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+    }
     data2 = {
         "allow_registration": "false",
         "app_name": "com.xiaomi.hm.health",
-        "app_version": "6.3.5",
-        "code": f"{code}",
+        "app_version": "6.14.0",
+        "code": code,
         "country_code": "CN",
         "device_id": "2C8B4939-0CCD-4E94-8CBA-CB8EA6E613A1",
-        "device_model": "phone",
-        "dn": "api-user.huami.com,api-mifit.huami.com,app-analytics.huami.com",
+        "device_model": "android_phone",
+        "dn": "account.zepp.com,api-user.zepp.com,api-mifit.zepp.com,api-watch.zepp.com,app-analytics.zepp.com,api-analytics.huami.com,auth.zepp.com",
         "grant_type": "access_token",
         "lang": "zh_CN",
         "os_version": "1.5.0",
-        "source": "com.xiaomi.hm.health",
-        "third_name": third_name,
+        "source": "com.xiaomi.hm.health:6.14.0:50818",
+        "third_name": "email",
     }
-    r2 = requests.post(url2, data=data2, headers=_headers).json()
+    r2 = requests.post("https://account.huami.com/v2/client/login",
+                       headers=step2_headers, data=data2).json()
     print(r2)
     try:
-        # 直接从登录响应中获取 app_token，无需二次请求
         app_token = r2["token_info"]["app_token"]
         userid = r2["token_info"]["user_id"]
     except (KeyError, TypeError):
+        print(f"token 获取失败，响应：{r2}")
         return 0, 0
     print("app_token获取成功！")
     print(app_token)

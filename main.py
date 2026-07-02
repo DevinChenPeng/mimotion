@@ -57,10 +57,11 @@ def login(_user, password):
     try:
         location = r1.headers["Location"]
         code = get_code(location)
+        print(r1)
     except:
         return 0, 0
-    # print("access_code获取成功！")
-    # print(code)
+    print("access_code获取成功！")
+    print(code)
 
     url2 = "https://account.huami.com/v2/client/login"
     third_name = "email" if is_email else "huami_phone"
@@ -80,6 +81,7 @@ def login(_user, password):
         "third_name": third_name,
     }
     r2 = requests.post(url2, data=data2, headers=_headers).json()
+    print(r2)
     try:
         # 直接从登录响应中获取 app_token，无需二次请求
         app_token = r2["token_info"]["app_token"]

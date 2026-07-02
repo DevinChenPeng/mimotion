@@ -340,8 +340,8 @@ def get_app_token(login_token):
         f"&login_token={login_token}"
     response = requests.get(url, headers=headers).json()
     app_token = response['token_info']['app_token']
-    # print("app_token获取成功！")
-    # print(app_token)
+    print("app_token获取成功！")
+    print(app_token)
     return app_token
 
 

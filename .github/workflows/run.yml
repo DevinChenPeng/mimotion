@@ -4,8 +4,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: 15 8 * * *
+  schedule:    # 每天北京时间 19:15（UTC 11:15）
+    - cron: "15 11 * * *"
   watch: 
     types: started
 jobs:
